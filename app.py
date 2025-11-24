@@ -67,28 +67,31 @@ class TradingDashboard:
     
     def save_config(self):
         """حفظ الإعدادات"""
-        with open('trading_config.json', 'w') as f:
-            json.dump(self.config, f)
+        try:
+            with open('trading_config.json', 'w') as f:
+                json.dump(self.config, f)
+        except:
+            pass
     
     def setup_session_state(self):
-        """إعداد حالة الجلسة - الإصلاح هنا"""
-        # تهيئة جميع متغيرات حالة الجلسة
-        if 'bot_running' not in st.session_state:
-            st.session_state.bot_running = False
-        if 'selected_currency' not in st.session_state:
-            st.session_state.selected_currency = 'BTCUSDT'
-        if 'trade_history' not in st.session_state:
-            st.session_state.trade_history = []
-        if 'learning_data' not in st.session_state:
-            st.session_state.learning_data = []
-        if 'initialized' not in st.session_state:
-            st.session_state.initialized = True
+        """إعداد حالة الجلسة"""
+        defaults = {
+            'bot_running': False,
+            'selected_currency': 'BTCUSDT',
+            'trade_history': [],
+            'learning_data': [],
+            'initialized': True
+        }
+        
+        for key, value in defaults.items():
+            if key not in st.session_state:
+                st.session_state[key] = value
     
     def render_header(self):
-        """رأس الصفحة - الإصلاح هنا"""
+        """رأس الصفحة"""
         st.markdown('<h1 class="main-header">🚀 AION QUANTUM PRO TRADING</h1>', unsafe_allow_html=True)
         
-        # استخدام get للوصول الآمن إلى session_state
+        # استخدام get للوصول الآمن
         bot_status = st.session_state.get('bot_running', False)
         trade_history = st.session_state.get('trade_history', [])
         
@@ -147,12 +150,10 @@ class TradingDashboard:
             if st.button("🚀 تشغيل البوت", type="primary", use_container_width=True):
                 st.session_state.bot_running = True
                 st.success("✅ البوت يعمل الآن!")
-                st.rerun()
         with col2:
             if st.button("⏹️ إيقاف البوت", use_container_width=True):
                 st.session_state.bot_running = False
                 st.warning("⏹️ تم إيقاف البوت")
-                st.rerun()
         
         # إعدادات التداول
         st.sidebar.header("⚡ إعدادات التداول")
@@ -202,21 +203,14 @@ class TradingDashboard:
             
             if st.button("🎯 تشغيل المحاكاة", use_container_width=True):
                 self.run_historical_simulation(start_date, end_date, simulation_coins)
-                st.rerun()
     
     def run_historical_simulation(self, start_date, end_date, coins_count):
         """تشغيل المحاكاة التاريخية"""
         with st.spinner(f"جاري محاكاة {coins_count} عملات من {start_date} إلى {end_date}..."):
-            # محاكاة البيانات
             simulated_trades = self.simulate_historical_trades(coins_count, start_date, end_date)
-            
-            # حفظ بيانات التعلم
             self.save_learning_data(simulated_trades)
-            
-            # عرض النتائج
             st.success(f"✅ تمت المحاكاة: {len(simulated_trades)} صفقة")
             
-            # تحليل النتائج
             total_profit = sum(trade.get('profit', 0) for trade in simulated_trades)
             win_rate = len([t for t in simulated_trades if t.get('profit', 0) > 0]) / len(simulated_trades) if simulated_trades else 0
             
@@ -230,9 +224,8 @@ class TradingDashboard:
         trades = []
         coins = self.get_trading_coins()[:coins_count]
         
-        # محاكاة صفقات واقعية
         for coin in coins:
-            for _ in range(20):  # 20 صفقة لكل عملة
+            for _ in range(20):
                 trade = {
                     'timestamp': datetime.now() - timedelta(days=np.random.randint(1, 30)),
                     'symbol': coin,
@@ -262,13 +255,6 @@ class TradingDashboard:
             learning_data.append(learning_record)
         
         st.session_state.learning_data = learning_data
-        
-        # حفظ في ملف
-        try:
-            with open('learning_data.json', 'w') as f:
-                json.dump(learning_data, f, indent=2, default=str)
-        except Exception as e:
-            st.error(f"خطأ في الحفظ: {e}")
     
     def get_market_conditions(self, symbol):
         """الحصول على ظروف السوق"""
@@ -289,11 +275,9 @@ class TradingDashboard:
         """لوحة العملات"""
         st.header("📊 لوحة العملات المتداولة")
         
-        # العملات المتاحة
         trading_coins = self.get_trading_coins()
         selected_currency = st.session_state.get('selected_currency', 'BTCUSDT')
         
-        # عرض العملات على الجانب الأيمن
         col1, col2 = st.columns([3, 1])
         
         with col2:
@@ -301,7 +285,6 @@ class TradingDashboard:
             for coin in trading_coins[:self.config.get('max_coins', 10)]:
                 if st.button(coin, key=f"btn_{coin}", use_container_width=True):
                     st.session_state.selected_currency = coin
-                    st.rerun()
         
         with col1:
             self.render_currency_chart()
@@ -312,14 +295,12 @@ class TradingDashboard:
         selected_currency = st.session_state.get('selected_currency', 'BTCUSDT')
         st.subheader(f"📈 تحليل {selected_currency}")
         
-        # إنشاء بيانات شموع محاكاة
         dates = pd.date_range(end=datetime.now(), periods=50, freq='1h')
         opens = np.random.uniform(100, 500, 50)
         highs = opens * np.random.uniform(1.01, 1.03, 50)
         lows = opens * np.random.uniform(0.97, 0.99, 50)
         closes = opens * np.random.uniform(0.98, 1.02, 50)
         
-        # رسم الشموع
         fig = go.Figure(data=[go.Candlestick(
             x=dates,
             open=opens,
@@ -329,7 +310,6 @@ class TradingDashboard:
             name=selected_currency
         )])
         
-        # إضافة المتوسطات المتحركة
         fig.add_trace(go.Scatter(
             x=dates, y=pd.Series(closes).rolling(20).mean(),
             name='MA 20',
@@ -368,10 +348,8 @@ class TradingDashboard:
         with col3:
             if st.button("🟢 فتح صفقة شراء", use_container_width=True):
                 self.execute_trade('BUY')
-                st.rerun()
             if st.button("🔴 فتح صفقة بيع", use_container_width=True):
                 self.execute_trade('SELL')
-                st.rerun()
     
     def execute_trade(self, action):
         """تنفيذ صفقة"""
@@ -403,7 +381,6 @@ class TradingDashboard:
             st.info("لا توجد صفقات حتى الآن")
             return
         
-        # تحويل البيانات لعرضها
         trades_df = pd.DataFrame(trade_history)
         trades_df['timestamp'] = pd.to_datetime(trades_df['timestamp']).dt.strftime('%Y-%m-%d %H:%M:%S')
         trades_df['profit_display'] = trades_df['profit'].apply(
@@ -411,13 +388,11 @@ class TradingDashboard:
             else f"<span class='trade-negative'>-${abs(x):.2f}</span>"
         )
         
-        # عرض الجدول
         st.markdown(trades_df[[
             'timestamp', 'symbol', 'action', 'amount', 
             'price', 'profit_display', 'strategy', 'confidence'
         ]].to_html(escape=False, index=False), unsafe_allow_html=True)
         
-        # إحصائيات
         st.subheader("📈 إحصائيات الأداء")
         col1, col2, col3, col4 = st.columns(4)
         
@@ -441,19 +416,15 @@ class TradingDashboard:
     
     def run(self):
         """تشغيل الواجهة"""
-        # التأكد من تهيئة session state أولاً
         self.setup_session_state()
-        
         self.render_header()
         self.render_api_settings()
         self.render_control_panel()
         self.render_historical_simulation()
-        
-        # المحتوى الرئيسي
         self.render_currency_dashboard()
         self.render_trade_history()
 
-# تشغيل التطبيق
+# التشغيل الرئيسي
 if __name__ == "__main__":
     dashboard = TradingDashboard()
     dashboard.run()
