@@ -71,7 +71,8 @@ class TradingDashboard:
             json.dump(self.config, f)
     
     def setup_session_state(self):
-        """إعداد حالة الجلسة"""
+        """إعداد حالة الجلسة - الإصلاح هنا"""
+        # تهيئة جميع متغيرات حالة الجلسة
         if 'bot_running' not in st.session_state:
             st.session_state.bot_running = False
         if 'selected_currency' not in st.session_state:
@@ -80,24 +81,30 @@ class TradingDashboard:
             st.session_state.trade_history = []
         if 'learning_data' not in st.session_state:
             st.session_state.learning_data = []
+        if 'initialized' not in st.session_state:
+            st.session_state.initialized = True
     
     def render_header(self):
-        """رأس الصفحة"""
+        """رأس الصفحة - الإصلاح هنا"""
         st.markdown('<h1 class="main-header">🚀 AION QUANTUM PRO TRADING</h1>', unsafe_allow_html=True)
+        
+        # استخدام get للوصول الآمن إلى session_state
+        bot_status = st.session_state.get('bot_running', False)
+        trade_history = st.session_state.get('trade_history', [])
         
         # شريط الحالة
         col1, col2, col3, col4, col5 = st.columns(5)
         with col1:
-            status = "🟢 نشط" if st.session_state.bot_running else "🔴 متوقف"
+            status = "🟢 نشط" if bot_status else "🔴 متوقف"
             st.metric("حالة البوت", status)
         with col2:
             balance = self.config.get('initial_balance', 50)
             st.metric("رأس المال", f"${balance:.2f}")
         with col3:
-            total_trades = len(st.session_state.trade_history)
+            total_trades = len(trade_history)
             st.metric("إجمالي الصفقات", total_trades)
         with col4:
-            profit = sum(trade['profit'] for trade in st.session_state.trade_history)
+            profit = sum(trade.get('profit', 0) for trade in trade_history)
             st.metric("الأرباح الكلية", f"${profit:.2f}")
         with col5:
             active_coins = len(self.get_trading_coins())
@@ -108,17 +115,17 @@ class TradingDashboard:
         st.sidebar.header("🔑 إعدادات الحساب")
         
         with st.sidebar.expander("⚙️ إعدادات API", expanded=True):
-            api_key = st.text_input("API Key", value=self.config['api_key'], type="password")
-            api_secret = st.text_input("Secret Key", value=self.config['api_secret'], type="password")
+            api_key = st.text_input("API Key", value=self.config.get('api_key', ''), type="password")
+            api_secret = st.text_input("Secret Key", value=self.config.get('api_secret', ''), type="password")
             
             col1, col2 = st.columns(2)
             with col1:
-                testnet = st.checkbox("الحساب التجريبي", value=self.config['testnet'])
+                testnet = st.checkbox("الحساب التجريبي", value=self.config.get('testnet', True))
             with col2:
                 trading_mode = st.selectbox(
                     "وضع التداول",
                     ["paper_trading", "live_trading"],
-                    index=0 if self.config['trading_mode'] == 'paper_trading' else 1
+                    index=0 if self.config.get('trading_mode', 'paper_trading') == 'paper_trading' else 1
                 )
             
             if st.button("💾 حفظ الإعدادات", use_container_width=True):
@@ -140,16 +147,18 @@ class TradingDashboard:
             if st.button("🚀 تشغيل البوت", type="primary", use_container_width=True):
                 st.session_state.bot_running = True
                 st.success("✅ البوت يعمل الآن!")
+                st.rerun()
         with col2:
             if st.button("⏹️ إيقاف البوت", use_container_width=True):
                 st.session_state.bot_running = False
                 st.warning("⏹️ تم إيقاف البوت")
+                st.rerun()
         
         # إعدادات التداول
         st.sidebar.header("⚡ إعدادات التداول")
         self.config['initial_balance'] = st.sidebar.number_input(
             "رأس المال ($)", 
-            value=self.config['initial_balance'],
+            value=self.config.get('initial_balance', 50),
             min_value=10,
             step=10
         )
@@ -158,14 +167,14 @@ class TradingDashboard:
             "عدد العملات المتداولة",
             min_value=1,
             max_value=10,
-            value=self.config['max_coins']
+            value=self.config.get('max_coins', 10)
         )
         
         self.config['trade_amount'] = st.sidebar.slider(
             "مبلغ التداول ($)",
             min_value=5,
             max_value=100,
-            value=self.config['trade_amount'],
+            value=self.config.get('trade_amount', 10),
             step=5
         )
     
@@ -193,6 +202,7 @@ class TradingDashboard:
             
             if st.button("🎯 تشغيل المحاكاة", use_container_width=True):
                 self.run_historical_simulation(start_date, end_date, simulation_coins)
+                st.rerun()
     
     def run_historical_simulation(self, start_date, end_date, coins_count):
         """تشغيل المحاكاة التاريخية"""
@@ -207,8 +217,8 @@ class TradingDashboard:
             st.success(f"✅ تمت المحاكاة: {len(simulated_trades)} صفقة")
             
             # تحليل النتائج
-            total_profit = sum(trade['profit'] for trade in simulated_trades)
-            win_rate = len([t for t in simulated_trades if t['profit'] > 0]) / len(simulated_trades)
+            total_profit = sum(trade.get('profit', 0) for trade in simulated_trades)
+            win_rate = len([t for t in simulated_trades if t.get('profit', 0) > 0]) / len(simulated_trades) if simulated_trades else 0
             
             col1, col2, col3 = st.columns(3)
             col1.metric("إجمالي الأرباح", f"${total_profit:.2f}")
@@ -227,7 +237,7 @@ class TradingDashboard:
                     'timestamp': datetime.now() - timedelta(days=np.random.randint(1, 30)),
                     'symbol': coin,
                     'action': np.random.choice(['BUY', 'SELL']),
-                    'amount': self.config['trade_amount'],
+                    'amount': self.config.get('trade_amount', 10),
                     'price': np.random.uniform(10, 500),
                     'profit': np.random.normal(2, 1.5),
                     'strategy': np.random.choice(['Momentum', 'Mean Reversion', 'Breakout']),
@@ -239,22 +249,26 @@ class TradingDashboard:
     
     def save_learning_data(self, trades):
         """حفظ بيانات التعلم"""
+        learning_data = st.session_state.get('learning_data', [])
+        
         for trade in trades:
             learning_record = {
                 'trade_data': trade,
-                'market_conditions': self.get_market_conditions(trade['symbol']),
-                'outcome': 'WIN' if trade['profit'] > 0 else 'LOSS',
+                'market_conditions': self.get_market_conditions(trade.get('symbol', '')),
+                'outcome': 'WIN' if trade.get('profit', 0) > 0 else 'LOSS',
                 'timestamp': datetime.now(),
                 'lessons': self.extract_lessons(trade)
             }
-            st.session_state.learning_data.append(learning_record)
+            learning_data.append(learning_record)
+        
+        st.session_state.learning_data = learning_data
         
         # حفظ في ملف
         try:
             with open('learning_data.json', 'w') as f:
-                json.dump(st.session_state.learning_data, f, indent=2, default=str)
-        except:
-            pass
+                json.dump(learning_data, f, indent=2, default=str)
+        except Exception as e:
+            st.error(f"خطأ في الحفظ: {e}")
     
     def get_market_conditions(self, symbol):
         """الحصول على ظروف السوق"""
@@ -266,7 +280,7 @@ class TradingDashboard:
     
     def extract_lessons(self, trade):
         """استخراج الدروس من الصفقة"""
-        if trade['profit'] > 0:
+        if trade.get('profit', 0) > 0:
             return ["SUCCESSFUL_ENTRY", "GOOD_TIMING"]
         else:
             return ["NEED_BETTER_ENTRY", "RISK_MANAGEMENT"]
@@ -277,15 +291,17 @@ class TradingDashboard:
         
         # العملات المتاحة
         trading_coins = self.get_trading_coins()
+        selected_currency = st.session_state.get('selected_currency', 'BTCUSDT')
         
         # عرض العملات على الجانب الأيمن
         col1, col2 = st.columns([3, 1])
         
         with col2:
             st.subheader("💱 العملات النشطة")
-            for coin in trading_coins[:self.config['max_coins']]:
+            for coin in trading_coins[:self.config.get('max_coins', 10)]:
                 if st.button(coin, key=f"btn_{coin}", use_container_width=True):
                     st.session_state.selected_currency = coin
+                    st.rerun()
         
         with col1:
             self.render_currency_chart()
@@ -293,7 +309,8 @@ class TradingDashboard:
     
     def render_currency_chart(self):
         """رسم الشموع والمؤشرات"""
-        st.subheader(f"📈 تحليل {st.session_state.selected_currency}")
+        selected_currency = st.session_state.get('selected_currency', 'BTCUSDT')
+        st.subheader(f"📈 تحليل {selected_currency}")
         
         # إنشاء بيانات شموع محاكاة
         dates = pd.date_range(end=datetime.now(), periods=50, freq='1h')
@@ -309,7 +326,7 @@ class TradingDashboard:
             high=highs,
             low=lows,
             close=closes,
-            name=st.session_state.selected_currency
+            name=selected_currency
         )])
         
         # إضافة المتوسطات المتحركة
@@ -326,7 +343,7 @@ class TradingDashboard:
         ))
         
         fig.update_layout(
-            title=f"تحليل فني - {st.session_state.selected_currency}",
+            title=f"تحليل فني - {selected_currency}",
             xaxis_title="الوقت",
             yaxis_title="السعر ($)",
             height=400
@@ -351,35 +368,43 @@ class TradingDashboard:
         with col3:
             if st.button("🟢 فتح صفقة شراء", use_container_width=True):
                 self.execute_trade('BUY')
+                st.rerun()
             if st.button("🔴 فتح صفقة بيع", use_container_width=True):
                 self.execute_trade('SELL')
+                st.rerun()
     
     def execute_trade(self, action):
         """تنفيذ صفقة"""
+        selected_currency = st.session_state.get('selected_currency', 'BTCUSDT')
+        trade_history = st.session_state.get('trade_history', [])
+        
         trade = {
             'timestamp': datetime.now(),
-            'symbol': st.session_state.selected_currency,
+            'symbol': selected_currency,
             'action': action,
-            'amount': self.config['trade_amount'],
+            'amount': self.config.get('trade_amount', 10),
             'price': np.random.uniform(100, 500),
             'profit': np.random.normal(2, 1),
             'strategy': 'Manual',
             'confidence': 0.8
         }
         
-        st.session_state.trade_history.append(trade)
-        st.success(f"✅ تم {action} {st.session_state.selected_currency}")
+        trade_history.append(trade)
+        st.session_state.trade_history = trade_history
+        st.success(f"✅ تم {action} {selected_currency}")
     
     def render_trade_history(self):
         """سجل الصفقات"""
         st.header("📋 سجل الصفقات المفصل")
         
-        if not st.session_state.trade_history:
+        trade_history = st.session_state.get('trade_history', [])
+        
+        if not trade_history:
             st.info("لا توجد صفقات حتى الآن")
             return
         
         # تحويل البيانات لعرضها
-        trades_df = pd.DataFrame(st.session_state.trade_history)
+        trades_df = pd.DataFrame(trade_history)
         trades_df['timestamp'] = pd.to_datetime(trades_df['timestamp']).dt.strftime('%Y-%m-%d %H:%M:%S')
         trades_df['profit_display'] = trades_df['profit'].apply(
             lambda x: f"<span class='trade-positive'>+${x:.2f}</span>" if x > 0 
@@ -396,15 +421,16 @@ class TradingDashboard:
         st.subheader("📈 إحصائيات الأداء")
         col1, col2, col3, col4 = st.columns(4)
         
-        total_trades = len(st.session_state.trade_history)
-        winning_trades = len([t for t in st.session_state.trade_history if t['profit'] > 0])
-        total_profit = sum(t['profit'] for t in st.session_state.trade_history)
+        total_trades = len(trade_history)
+        winning_trades = len([t for t in trade_history if t.get('profit', 0) > 0])
+        total_profit = sum(t.get('profit', 0) for t in trade_history)
         avg_profit = total_profit / total_trades if total_trades > 0 else 0
+        best_trade = max([t.get('profit', 0) for t in trade_history]) if trade_history else 0
         
         col1.metric("إجمالي الصفقات", total_trades)
-        col2.metric("الصفقات الرابحة", f"{winning_trades} ({winning_trades/total_trades:.1%})")
+        col2.metric("الصفقات الرابحة", f"{winning_trades} ({winning_trades/total_trades:.1%})" if total_trades > 0 else "0")
         col3.metric("متوسط الربح", f"${avg_profit:.2f}")
-        col4.metric("أفضل صفقة", f"${max([t['profit'] for t in st.session_state.trade_history]):.2f}")
+        col4.metric("أفضل صفقة", f"${best_trade:.2f}")
     
     def get_trading_coins(self):
         """قائمة العملات المتداولة"""
@@ -415,6 +441,9 @@ class TradingDashboard:
     
     def run(self):
         """تشغيل الواجهة"""
+        # التأكد من تهيئة session state أولاً
+        self.setup_session_state()
+        
         self.render_header()
         self.render_api_settings()
         self.render_control_panel()
